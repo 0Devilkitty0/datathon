@@ -27,3 +27,15 @@ for df in data:
     df[:] = df[df['session_length_in_minutes'] != -1]
     df[:] = df[df['current_address_months_count'] != -1]
     # df['days_since_request'].replace(-1, 0, inplace=True)
+#%%
+# one-hot encoding
+object_cols = ['source', 'device_os']
+for i, df in enumerate(data):
+    data[i] = pd.get_dummies(data=df, columns=object_cols, drop_first=True, dtype=int)
+    base_copy = data[0]
+    var1_copy = data[1]
+    var2_copy = data[2]
+    var3_copy = data[3]
+    var4_copy = data[4]
+    var5_copy = data[5]
+# %%
