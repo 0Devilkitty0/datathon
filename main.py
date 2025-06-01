@@ -284,4 +284,18 @@ print(confusion)
 print('=======================================================')
 print(f'정확도:{accuracy}, 정밀도:{precision}, 재현율:{recall}')
 
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve
+# ROC curve 시각화
+fpr, tpr, thresholds = roc_curve(y_test_base, y_proba_test_xgb)
+auc = roc_auc_score(y_test_base, y_proba_test_xgb)
+
+# ROC curve 시각화
+plt.plot(fpr, tpr, linewidth=2,label=f'{'XGB_MODEL_NAME'} (AUC = {auc:.5f})')
+plt.plot([0, 1], [0, 1], 'k--') # dashed diagonal
+plt.xlabel('fpr')
+plt.ylabel('tpr')
+plt.legend()
+print(f'auc:{auc}')
 print(f"베이지안 최적화된 모델의 최종 테스트 AUC: {test_auc_bo_xgb:.4f}")
+# %%
