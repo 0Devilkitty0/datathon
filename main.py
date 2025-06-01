@@ -162,6 +162,6 @@ x_train, x_test, y_train, y_test = split_train_test(base_sam)
 # %%
 XGB = XGBClassifier()
 LGB = LGBMClassifier()
-CatB = CatBoostClassifier()
+CB = CatBoostClassifier()
 GB = GradientBoostingClassifier()
 # %%
