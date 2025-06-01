@@ -89,48 +89,79 @@ var3_sam, X_test, y_train, y_test = split_data(var3_copy)
 var4_sam, X_test, y_train, y_test = split_data(var4_copy)
 var5_sam, X_test, y_train, y_test = split_data(var5_copy)
 
+# # %%
+# ##### Correlation Matrix Heatmap ###
+# import seaborn as sns
+# import matplotlib.pyplot as plt
+
+# df = [base_copy, var1_copy, var2_copy, var3_copy, var4_copy, var5_copy]
+# for df in df:
+#     correlation_matrix = df.corr(numeric_only=True)
+#     plt.figure(figsize=(35, 35))
+#     sns.heatmap(
+#         correlation_matrix,  
+#         annot=True,          
+#         cmap='coolwarm',     
+#         fmt=".2f",          
+#         linewidths=.5,      
+#         cbar=True           
+#     )
+#     plt.title('Correlation Matrix Heatmap')
+#     plt.show()
+
 # %%
-##### Correlation Matrix Heatmap ###
-import seaborn as sns
-import matplotlib.pyplot as plt
+# #### Distribution of All Columns ###
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# num_cols = len(base_copy.columns)
+# x = 4
+# y = (num_cols + x - 1) // x 
+# plt.figure(figsize=(x * 5, y * 4))
+# for i, col in enumerate(base_copy.columns):
+#     plt.subplot(y, x, i + 1)
 
-df = [base_copy, var1_copy, var2_copy, var3_copy, var4_copy, var5_copy]
-for df in df:
-    correlation_matrix = df.corr(numeric_only=True)
-    plt.figure(figsize=(35, 35))
-    sns.heatmap(
-        correlation_matrix,  
-        annot=True,          
-        cmap='coolwarm',     
-        fmt=".2f",          
-        linewidths=.5,      
-        cbar=True           
-    )
-    plt.title('Correlation Matrix Heatmap')
-    plt.show()
+#     if base_copy[col].nunique() < 5 and base_copy[col].dtype == 'int64':
+#             sns.countplot(x=col, data=base_copy)
+#             plt.xlabel(col, fontsize=10)
+#             plt.ylabel('Count', fontsize=10)
 
+#     else:
+#         sns.histplot(base_copy[col], kde=True, bins=30)
+#         plt.xlabel(col, fontsize=10)
+#         plt.ylabel('Frequency', fontsize=10)
+
+# plt.tight_layout()
+# plt.suptitle('All Columns Distribution', y=1.02, fontsize=18) 
+# plt.show()
 # %%
-#### Distribution of All Columns ###
-import matplotlib.pyplot as plt
-import seaborn as sns
-num_cols = len(base_copy.columns)
-x = 4
-y = (num_cols + x - 1) // x 
-plt.figure(figsize=(x * 5, y * 4))
-for i, col in enumerate(base_copy.columns):
-    plt.subplot(y, x, i + 1)
+### Modeling ###
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
+from sklearn.metrics import roc_auc_score
+from skopt import gp_minimize
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier
+#%%
+## data splitting for modeling
+def split_train_test(df):
+    df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 0), 'group'] = 0
+    df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 1), 'group'] = 1
+    df.loc[(df['customer_age'] >= 50) & (df['fraud_bool'] == 0), 'group'] = 2
+    df.loc[(df['customer_age'] >= 50) & (df['fraud_bool'] == 1), 'group'] = 3
+    df['group'] = df['group'].astype(int)
+    X = df.drop(columns=['fraud_bool', 'group'])
+    y = df['fraud_bool']
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=df['group'])
+    
+    return X_train, X_test, y_train, y_test
 
-    if base_copy[col].nunique() < 5 and base_copy[col].dtype == 'int64':
-            sns.countplot(x=col, data=base_copy)
-            plt.xlabel(col, fontsize=10)
-            plt.ylabel('Count', fontsize=10)
-
-    else:
-        sns.histplot(base_copy[col], kde=True, bins=30)
-        plt.xlabel(col, fontsize=10)
-        plt.ylabel('Frequency', fontsize=10)
-
-plt.tight_layout()
-plt.suptitle('All Columns Distribution', y=1.02, fontsize=18) 
-plt.show()
+x_train, x_test, y_train, y_test = split_train_test(base_sam)
+# %%
+XGB = XGBClassifier()
+LGB = LGBMClassifier()
+CatB = CatBoostClassifier()
+GB = GradientBoostingClassifier()
 # %%
