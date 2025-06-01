@@ -158,7 +158,6 @@ def split_train_test(df):
     
     return X_train, X_test, y_train, y_test
 
-x_train, x_test, y_train, y_test = split_train_test(base_sam)
 # %%
 XGB = XGBClassifier()
 LGB = LGBMClassifier()
