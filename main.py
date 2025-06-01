@@ -1,43 +1,59 @@
 #%%
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings('ignore')
 
-#%%
 base = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Base.csv')
-var1 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant I.csv')
-var2 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant II.csv')
-var3 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant III.csv')
-var4 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant IV.csv')
-var5 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant V.csv')
-#%%
-base_copy = base.copy()
-var1_copy = var1.copy()
-var2_copy = var2.copy()
-var3_copy = var3.copy() 
-var4_copy = var4.copy()
-var5_copy = var5.copy()
-# %%
-### 전처리 ###
+base_df_copy = base.copy()
 
-data = [base_copy, var1_copy, var2_copy, var3_copy, var4_copy, var5_copy]
-drop_cols = ['days_since_request','payment_type', 'employment_status', 'prev_address_months_count', 'intended_balcon_amount', 'housing_status']
-for df in data:
-    df.drop(columns=drop_cols, inplace=True, errors='ignore')
-    df['bank_months_count'].replace(-1, 0, inplace=True)
-    df[:] = df[df['session_length_in_minutes'] != -1]
-    df[:] = df[df['current_address_months_count'] != -1]
-    # df['days_since_request'].replace(-1, 0, inplace=True)
+var1 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant I.csv')
+var1_copy = var1.copy()
+
+var2 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant II.csv')
+var2_copy = var2.copy()
+
+var3 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant III.csv')
+var3_copy = var3.copy()
+
+var4 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant IV.csv')
+var4_copy = var4.copy()
+
+var5 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant V.csv')
+var5_copy = var5.copy()
+
 #%%
-# one-hot encoding
-object_cols = ['source', 'device_os']
-for i, df in enumerate(data):
-    data[i] = pd.get_dummies(data=df, columns=object_cols, drop_first=True, dtype=int)
-#%%
-base_copy = data[0]
-var1_copy = data[1]
-var2_copy = data[2]
-var3_copy = data[3]
-var4_copy = data[4]
-var5_copy = data[5]
-#%%
+def EDA_dataset(df):
+    drop_col = ['payment_type', 'employment_status', 'prev_address_months_count', 'intended_balcon_amount', 'housing_status', 'days_since_request']
+    df.drop(columns = drop_col, inplace = True)
+
+    df = df[df['current_address_months_count'] >= 0]
+
+    df['bank_months_count'].replace({-1: 0}, inplace = True)
+
+    df = df[df['session_length_in_minutes'] >= 0]
+
+    df['proposed_credit_limit'] = df['proposed_credit_limit'].astype(int)
+
+
+    return df
+# %%
+base_df_copy = EDA_dataset(base_df_copy)
+var1_copy = EDA_dataset(var1_copy)
+var2_copy = EDA_dataset(var2_copy)
+var3_copy = EDA_dataset(var3_copy)
+var4_copy = EDA_dataset(var4_copy)
+var5_copy = EDA_dataset(var5_copy)
+
+# %%
+def one_hot(df):
+    object_cols = ['source', 'device_os']
+    df = pd.get_dummies(df, columns=object_cols, drop_first=True, dtype=int)
+
+    return df
+# %%
+base_df_copy = one_hot(base_df_copy)
+var1_copy = one_hot(var1_copy)  
+var2_copy = one_hot(var2_copy)
+var3_copy = one_hot(var3_copy)
+var4_copy = one_hot(var4_copy)
+var5_copy = one_hot(var5_copy)
