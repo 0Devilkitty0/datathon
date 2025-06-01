@@ -144,6 +144,7 @@ from skopt.space import Integer, Real
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
+from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 #%%
 ## data splitting for modeling
@@ -210,36 +211,8 @@ param_names = [
         "reg_alpha",
         "reg_lambda"
     ]
+
 #%%
-# def objective(params, model, X_train, y_train):
-#     # params 리스트에서 각 하이퍼파라미터 값을 인덱스로 추출
-#     n_estimators = params[0]
-#     learning_rate = params[1]
-#     max_depth = params[2]
-#     subsample = params[3]
-#     colsample_bytree = params[4]
-#     reg_alpha = params[5]
-#     reg_lambda = params[6]
-
-#     # 추출한 하이퍼파라미터 값으로 XGBoost 모델 생성
-#     set_model = model(
-#         n_estimators=n_estimators,
-#         learning_rate=learning_rate,
-#         max_depth=max_depth,
-#         subsample=subsample,
-#         colsample_bytree=colsample_bytree,
-#         reg_alpha=reg_alpha,
-#         reg_lambda=reg_lambda,
-#         random_state=42,
-#         use_label_encoder=False # FutureWarning 방지
-#     )
-
-#     # K-Fold 교차 검증을 통해 모델 평가
-#     auc_scores = k_fold_training(model, set_model, X_train, y_train)
-
-#     # 평균 AUC 점수 반환
-#     return -np.mean(auc_scores)  # 최적화는 최소화를 목표로 하므로 음수로 반환
-
 def objective(params):
     param_dict = dict(zip(param_names, params))
 
