@@ -60,22 +60,6 @@ var4_copy = one_hot(var4_copy)
 var5_copy = one_hot(var5_copy)
 
 #%%
-def test_split(df):
-    df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 0), 'group'] = 0
-    df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 1), 'group'] = 1
-    df.loc[(df['customer_age'] >= 50) & (df['fraud_bool'] == 0), 'group'] = 2
-    df.loc[(df['customer_age'] >= 50) & (df['fraud_bool'] == 1), 'group'] = 3
-
-    return df
-# %%
-base_copy = test_split(base_copy)
-var1_copy = test_split(var1_copy)
-var2_copy = test_split(var2_copy)
-var3_copy = test_split(var3_copy)
-var4_copy = test_split(var4_copy)
-var5_copy = test_split(var5_copy)
-
-#%%
 ###100만개 데이터 중 10만개씩 sampking###
 from sklearn.model_selection import train_test_split
 def split_data(df):
