@@ -19,6 +19,7 @@ var4_copy = var4.copy()
 var5_copy = var5.copy()
 # %%
 ### 전처리 ###
+
 data = [base_copy, var1_copy, var2_copy, var3_copy, var4_copy, var5_copy]
 drop_cols = ['days_since_request','payment_type', 'employment_status', 'prev_address_months_count', 'intended_balcon_amount', 'housing_status']
 for df in data:
@@ -32,10 +33,11 @@ for df in data:
 object_cols = ['source', 'device_os']
 for i, df in enumerate(data):
     data[i] = pd.get_dummies(data=df, columns=object_cols, drop_first=True, dtype=int)
-    base_copy = data[0]
-    var1_copy = data[1]
-    var2_copy = data[2]
-    var3_copy = data[3]
-    var4_copy = data[4]
-    var5_copy = data[5]
-# %%
+#%%
+base_copy = data[0]
+var1_copy = data[1]
+var2_copy = data[2]
+var3_copy = data[3]
+var4_copy = data[4]
+var5_copy = data[5]
+#%%
