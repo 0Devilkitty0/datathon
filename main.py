@@ -64,7 +64,7 @@ var5_copy = one_hot(var5_copy)
 #%%
 ###100만개 데이터 중 10만개씩 sampling###
 from sklearn.model_selection import train_test_split
-def split_data(df):
+def sample_data_stratified(df):
     df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 0), 'group'] = 0
     df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 1), 'group'] = 1
     df.loc[(df['customer_age'] >= 50) & (df['fraud_bool'] == 0), 'group'] = 2
@@ -82,12 +82,12 @@ def split_data(df):
     
     return X_train, X_test, y_train, y_test
 #%%
-base_sam, X_test, y_train, y_test = split_data(base_copy)
-var1_sam, X_test, y_train, y_test = split_data(var1_copy)
-var2_sam, X_test, y_train, y_test = split_data(var2_copy)
-var3_sam, X_test, y_train, y_test = split_data(var3_copy)
-var4_sam, X_test, y_train, y_test = split_data(var4_copy)
-var5_sam, X_test, y_train, y_test = split_data(var5_copy)
+base_sam, X_test, y_train, y_test = sample_data_stratified(base_copy)
+var1_sam, X_test, y_train, y_test = sample_data_stratified(var1_copy)
+var2_sam, X_test, y_train, y_test = sample_data_stratified(var2_copy)
+var3_sam, X_test, y_train, y_test = sample_data_stratified(var3_copy)
+var4_sam, X_test, y_train, y_test = sample_data_stratified(var4_copy)
+var5_sam, X_test, y_train, y_test = sample_data_stratified(var5_copy)
 
 # # %%
 # ##### Correlation Matrix Heatmap ###
@@ -140,7 +140,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from sklearn.metrics import roc_auc_score
 from skopt import gp_minimize
-from sklearn.ensemble import RandomForestClassifier
+from skopt import space
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
@@ -160,8 +160,15 @@ def split_train_test(df):
     
     return X_train, X_test, y_train, y_test
 
+#%%
+x_train_base, x_test_base, y_train_base, y_test_base = split_train_test(base_sam)
+x_train_var1, x_test_var1, y_train_var1, y_test_var1 = split_train_test(var1_sam)
+x_train_var2, x_test_var2, y_train_var2, y_test_var2 = split_train_test(var2_sam)
+x_train_var3, x_test_var3, y_train_var3, y_test_var3 = split_train_test(var3_sam)
+x_train_var4, x_test_var4, y_train_var4, y_test_var4 = split_train_test(var4_sam)
+x_train_var5, x_test_var5, y_train_var5, y_test_var5 = split_train_test(var5_sam)
+
 # %%
-RF = RandomForestClassifier()
 XGB = XGBClassifier()
 LGB = LGBMClassifier()
 CB = CatBoostClassifier()
@@ -184,3 +191,111 @@ def k_fold_training(model, X_train, y_train):
         auc_scores.append(auc_score)
 
     return auc_scores
+#%%
+space = [
+    space.Integer(100, 1000, name='n_estimators'), # 트리의 개수
+    space.Real(0.01, 0.2, name='learning_rate', prior='log-uniform'), # 학습률 (로그 스케일이 유리)
+    space.Integer(3, 10, name='max_depth'), # 트리의 최대 깊이
+    space.Real(0.5, 1.0, name='subsample'), # 샘플링 비율 (각 트리마다 사용될 데이터 샘플의 비율)
+    space.Real(0.5, 1.0, name='colsample_bytree'), # 각 트리에 사용할 특성(컬럼) 비율
+    space.Real(1e-9, 10.0, name='reg_alpha', prior='log-uniform'), # L1 정규화
+    space.Real(1e-9, 10.0, name='reg_lambda', prior='log-uniform') # L2 정규화
+]
+
+param_names = [
+        "n_estimators",
+        "learning_rate",
+        "max_depth",
+        "subsample",
+        "colsample_bytree",
+        "reg_alpha",
+        "reg_lambda"
+    ]
+
+def objective(params, model, X_train, y_train):
+    # params 리스트에서 각 하이퍼파라미터 값을 인덱스로 추출
+    n_estimators = params[0]
+    learning_rate = params[1]
+    max_depth = params[2]
+    subsample = params[3]
+    colsample_bytree = params[4]
+    reg_alpha = params[5]
+    reg_lambda = params[6]
+
+    # 추출한 하이퍼파라미터 값으로 XGBoost 모델 생성
+    set_model = model(
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        random_state=42,
+        eval_metric='logloss', # 이진 분류에 적합
+        use_label_encoder=False # FutureWarning 방지
+    )
+    # K-Fold 교차 검증을 통해 모델 평가
+    auc_scores = k_fold_training(set_model, X_train, y_train)
+
+    # 평균 AUC 점수 반환
+    return -np.mean(auc_scores)  # 최적화는 최소화를 목표로 하므로 음수로 반환
+
+res_gp = gp_minimize(
+    objective,
+    space,
+    n_calls=50, # 총 50번의 하이퍼파라미터 조합을 시도
+    n_random_starts=10, # 초기 10번은 무작위로 탐색
+    random_state=42,
+    verbose=False
+)
+
+print(f"최적의 ROC AUC (K-Fold 검증 평균): {-res_gp.fun:.4f}")
+
+best_params = {
+    'n_estimators': res_gp.x[0],
+    'learning_rate': res_gp.x[1],
+    'max_depth': res_gp.x[2],
+    'subsample': res_gp.x[3],
+    'colsample_bytree': res_gp.x[4],
+    'reg_alpha': res_gp.x[5],
+    'reg_lambda': res_gp.x[6]
+}
+print("최적의 하이퍼파라미터:")
+for name, value in best_params.items():
+    print(f"{name}: {value}")
+#%%
+# 최적의 하이퍼파라미터로 XGBoost 모델 생성
+final_best_xgb_model = XGBClassifier(
+    n_estimators=best_params['n_estimators'],
+    learning_rate=best_params['learning_rate'],
+    max_depth=best_params['max_depth'],
+    subsample=best_params['subsample'],
+    colsample_bytree=best_params['colsample_bytree'],
+    reg_alpha=best_params['reg_alpha'],
+    reg_lambda=best_params['reg_lambda'],
+    random_state=42,
+    eval_metric='logloss',
+    use_label_encoder=False
+)
+#%%
+# 최적의 하이퍼파라미터로 모델 학습
+final_best_xgb_model.fit(x_train_base, y_train_base)
+# test_y, pred_y를 활용한 지표 적용
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score
+# 베이지안 최적화된 모델로 예측
+y_pred_test_xgb = final_best_xgb_model.predict(x_test_base)[:, 1]
+y_pred_test_xgb = final_best_xgb_model.predict_proba(x_test_base)[:, 1]
+
+test_auc_bo_xgb = roc_auc_score(y_test_base, y_pred_test_xgb)
+confusion = confusion_matrix(y_test_base, y_pred_test_xgb)
+accuracy  = accuracy_score(y_test_base, y_pred_test_xgb)
+precision = precision_score(y_test_base, y_pred_test_xgb)
+recall    = recall_score(y_test_base, y_pred_test_xgb)
+
+print('================= confusion matrix ====================')
+print(confusion)
+print('=======================================================')
+print(f'정확도:{accuracy}, 정밀도:{precision}, 재현율:{recall}')
+
+print(f"베이지안 최적화된 모델의 최종 테스트 AUC: {test_auc_bo_xgb:.4f}")
