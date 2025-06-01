@@ -140,7 +140,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from sklearn.metrics import roc_auc_score
 from skopt import gp_minimize
-from skopt import space
+from skopt.space import Integer, Real
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
@@ -178,30 +178,29 @@ GB = GradientBoostingClassifier()
 def k_fold_training(model, X_train, y_train):
     k_fold = KFold(n_splits=5, shuffle=True, random_state=42)
     auc_scores = []
-
+    
     for fold, (train_index, val_index) in enumerate(k_fold.split(X_train, y_train)):
-
         X_train_fold, X_val_fold = X_train.iloc[train_index], X_train.iloc[val_index]
         y_train_fold, y_val_fold = y_train.iloc[train_index], y_train.iloc[val_index]
 
         model.fit(X_train_fold, y_train_fold)
-        y_val_pred = model.predict(X_val_fold)[:, 1]
         y_val_proba = model.predict_proba(X_val_fold)[:, 1]
         auc_score = roc_auc_score(y_val_fold, y_val_proba)
         auc_scores.append(auc_score)
 
     return auc_scores
+
 #%%
 space = [
-    space.Integer(100, 1000, name='n_estimators'), # 트리의 개수
-    space.Real(0.01, 0.2, name='learning_rate', prior='log-uniform'), # 학습률 (로그 스케일이 유리)
-    space.Integer(3, 10, name='max_depth'), # 트리의 최대 깊이
-    space.Real(0.5, 1.0, name='subsample'), # 샘플링 비율 (각 트리마다 사용될 데이터 샘플의 비율)
-    space.Real(0.5, 1.0, name='colsample_bytree'), # 각 트리에 사용할 특성(컬럼) 비율
-    space.Real(1e-9, 10.0, name='reg_alpha', prior='log-uniform'), # L1 정규화
-    space.Real(1e-9, 10.0, name='reg_lambda', prior='log-uniform') # L2 정규화
+    Integer(100, 1000, name='n_estimators'), # 트리의 개수
+    Real(0.01, 0.2, name='learning_rate', prior='log-uniform'), # 학습률 (로그 스케일이 유리)
+    Integer(3, 10, name='max_depth'), # 트리의 최대 깊이
+    Real(0.5, 1.0, name='subsample'), # 샘플링 비율 (각 트리마다 사용될 데이터 샘플의 비율)
+    Real(0.5, 1.0, name='colsample_bytree'), # 각 트리에 사용할 특성(컬럼) 비율
+    Real(1e-9, 10.0, name='reg_alpha', prior='log-uniform'), # L1 정규화
+    Real(1e-9, 10.0, name='reg_lambda', prior='log-uniform') # L2 정규화
 ]
-
+#%%
 param_names = [
         "n_estimators",
         "learning_rate",
@@ -211,43 +210,57 @@ param_names = [
         "reg_alpha",
         "reg_lambda"
     ]
+#%%
+# def objective(params, model, X_train, y_train):
+#     # params 리스트에서 각 하이퍼파라미터 값을 인덱스로 추출
+#     n_estimators = params[0]
+#     learning_rate = params[1]
+#     max_depth = params[2]
+#     subsample = params[3]
+#     colsample_bytree = params[4]
+#     reg_alpha = params[5]
+#     reg_lambda = params[6]
 
-def objective(params, model, X_train, y_train):
-    # params 리스트에서 각 하이퍼파라미터 값을 인덱스로 추출
-    n_estimators = params[0]
-    learning_rate = params[1]
-    max_depth = params[2]
-    subsample = params[3]
-    colsample_bytree = params[4]
-    reg_alpha = params[5]
-    reg_lambda = params[6]
+#     # 추출한 하이퍼파라미터 값으로 XGBoost 모델 생성
+#     set_model = model(
+#         n_estimators=n_estimators,
+#         learning_rate=learning_rate,
+#         max_depth=max_depth,
+#         subsample=subsample,
+#         colsample_bytree=colsample_bytree,
+#         reg_alpha=reg_alpha,
+#         reg_lambda=reg_lambda,
+#         random_state=42,
+#         use_label_encoder=False # FutureWarning 방지
+#     )
 
-    # 추출한 하이퍼파라미터 값으로 XGBoost 모델 생성
-    set_model = model(
-        n_estimators=n_estimators,
-        learning_rate=learning_rate,
-        max_depth=max_depth,
-        subsample=subsample,
-        colsample_bytree=colsample_bytree,
-        reg_alpha=reg_alpha,
-        reg_lambda=reg_lambda,
-        random_state=42,
-        eval_metric='logloss', # 이진 분류에 적합
-        use_label_encoder=False # FutureWarning 방지
-    )
-    # K-Fold 교차 검증을 통해 모델 평가
-    auc_scores = k_fold_training(set_model, X_train, y_train)
+#     # K-Fold 교차 검증을 통해 모델 평가
+#     auc_scores = k_fold_training(model, set_model, X_train, y_train)
 
-    # 평균 AUC 점수 반환
-    return -np.mean(auc_scores)  # 최적화는 최소화를 목표로 하므로 음수로 반환
+#     # 평균 AUC 점수 반환
+#     return -np.mean(auc_scores)  # 최적화는 최소화를 목표로 하므로 음수로 반환
 
+def objective(params):
+    param_dict = dict(zip(param_names, params))
+
+    model = XGBClassifier(
+        **param_dict,
+        random_state=42, 
+        use_label_encoder=False, 
+        eval_metric='logloss'
+        )
+
+    auc_scores = k_fold_training(model, x_train_base, y_train_base)
+
+    return -np.mean(auc_scores)
+#%%
 res_gp = gp_minimize(
-    objective,
-    space,
-    n_calls=50, # 총 50번의 하이퍼파라미터 조합을 시도
-    n_random_starts=10, # 초기 10번은 무작위로 탐색
+    func=objective,
+    dimensions=space,
+    n_calls=50,
+    n_random_starts=10,
     random_state=42,
-    verbose=False
+    verbose=True
 )
 
 print(f"최적의 ROC AUC (K-Fold 검증 평균): {-res_gp.fun:.4f}")
