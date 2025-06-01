@@ -143,6 +143,7 @@ from skopt import gp_minimize
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
+import numpy as np
 #%%
 ## data splitting for modeling
 def split_train_test(df):
@@ -163,4 +164,21 @@ XGB = XGBClassifier()
 LGB = LGBMClassifier()
 CB = CatBoostClassifier()
 GB = GradientBoostingClassifier()
+
 # %%
+def k_fold_training(model, X_train, y_train):
+    k_fold = KFold(n_splits=5, shuffle=True, random_state=42)
+    auc_scores = []
+
+    for fold, (train_index, val_index) in enumerate(k_fold.split(X_train, y_train)):
+
+        X_train_fold, X_val_fold = X_train.iloc[train_index], X_train.iloc[val_index]
+        y_train_fold, y_val_fold = y_train.iloc[train_index], y_train.iloc[val_index]
+
+        model.fit(X_train_fold, y_train_fold)
+        y_val_pred = model.predict(X_val_fold)[:, 1]
+        y_val_proba = model.predict_proba(X_val_fold)[:, 1]
+        auc_score = roc_auc_score(y_val_fold, y_val_proba)
+        auc_scores.append(auc_score)
+
+    return auc_scores
