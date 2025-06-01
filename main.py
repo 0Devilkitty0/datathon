@@ -270,10 +270,10 @@ final_best_xgb_model.fit(x_train_base, y_train_base)
 # test_y, pred_y를 활용한 지표 적용
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score
 # 베이지안 최적화된 모델로 예측
-y_pred_test_xgb = final_best_xgb_model.predict(x_test_base)[:, 1]
-y_pred_test_xgb = final_best_xgb_model.predict_proba(x_test_base)[:, 1]
+y_pred_test_xgb = final_best_xgb_model.predict(x_test_base)
+y_proba_test_xgb = final_best_xgb_model.predict_proba(x_test_base)[:, 1]
 
-test_auc_bo_xgb = roc_auc_score(y_test_base, y_pred_test_xgb)
+test_auc_bo_xgb = roc_auc_score(y_test_base, y_proba_test_xgb)
 confusion = confusion_matrix(y_test_base, y_pred_test_xgb)
 accuracy  = accuracy_score(y_test_base, y_pred_test_xgb)
 precision = precision_score(y_test_base, y_pred_test_xgb)
