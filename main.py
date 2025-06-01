@@ -140,6 +140,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from sklearn.metrics import roc_auc_score
 from skopt import gp_minimize
+from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
@@ -160,6 +161,7 @@ def split_train_test(df):
     return X_train, X_test, y_train, y_test
 
 # %%
+RF = RandomForestClassifier()
 XGB = XGBClassifier()
 LGB = LGBMClassifier()
 CB = CatBoostClassifier()
