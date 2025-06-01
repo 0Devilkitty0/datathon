@@ -22,6 +22,7 @@ var5 = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Variant V.cs
 var5_copy = var5.copy()
 
 #%%
+### EDA dataset preprocessing ###
 def EDA_dataset(df):
     drop_col = ['payment_type', 'employment_status', 'prev_address_months_count', 'intended_balcon_amount', 'housing_status', 'days_since_request']
     df.drop(columns = drop_col, inplace = True)
@@ -37,30 +38,31 @@ def EDA_dataset(df):
 
     return df
 # %%
-base_df_copy = EDA_dataset(base_copy)
+base_copy = EDA_dataset(base_copy)
 var1_copy = EDA_dataset(var1_copy)
 var2_copy = EDA_dataset(var2_copy)
 var3_copy = EDA_dataset(var3_copy)
 var4_copy = EDA_dataset(var4_copy)
 var5_copy = EDA_dataset(var5_copy)
+
 # %%
-base_df_copy
-# %%
+### One-hot encoding for categorical variables####
 def one_hot(df):
     object_cols = ['source', 'device_os']
     df = pd.get_dummies(df, columns=object_cols, drop_first=True, dtype=int)
 
     return df
 # %%
-base_df_copy = one_hot(base_copy)
+base_copy = one_hot(base_copy)
 var1_copy = one_hot(var1_copy)  
 var2_copy = one_hot(var2_copy)
 var3_copy = one_hot(var3_copy)
 var4_copy = one_hot(var4_copy)
 var5_copy = one_hot(var5_copy)
 
+
 #%%
-###100만개 데이터 중 10만개씩 sampking###
+###100만개 데이터 중 10만개씩 sampling###
 from sklearn.model_selection import train_test_split
 def split_data(df):
     df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 0), 'group'] = 0
@@ -86,3 +88,49 @@ var2_sam, X_test, y_train, y_test = split_data(var2_copy)
 var3_sam, X_test, y_train, y_test = split_data(var3_copy)
 var4_sam, X_test, y_train, y_test = split_data(var4_copy)
 var5_sam, X_test, y_train, y_test = split_data(var5_copy)
+
+# %%
+##### Correlation Matrix Heatmap ###
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+df = [base_copy, var1_copy, var2_copy, var3_copy, var4_copy, var5_copy]
+for df in df:
+    correlation_matrix = df.corr(numeric_only=True)
+    plt.figure(figsize=(35, 35))
+    sns.heatmap(
+        correlation_matrix,  
+        annot=True,          
+        cmap='coolwarm',     
+        fmt=".2f",          
+        linewidths=.5,      
+        cbar=True           
+    )
+    plt.title('Correlation Matrix Heatmap')
+    plt.show()
+
+# %%
+#### Distribution of All Columns ###
+import matplotlib.pyplot as plt
+import seaborn as sns
+num_cols = len(base_copy.columns)
+x = 4
+y = (num_cols + x - 1) // x 
+plt.figure(figsize=(x * 5, y * 4))
+for i, col in enumerate(base_copy.columns):
+    plt.subplot(y, x, i + 1)
+
+    if base_copy[col].nunique() < 5 and base_copy[col].dtype == 'int64':
+            sns.countplot(x=col, data=base_copy)
+            plt.xlabel(col, fontsize=10)
+            plt.ylabel('Count', fontsize=10)
+
+    else:
+        sns.histplot(base_copy[col], kde=True, bins=30)
+        plt.xlabel(col, fontsize=10)
+        plt.ylabel('Frequency', fontsize=10)
+
+plt.tight_layout()
+plt.suptitle('All Columns Distribution', y=1.02, fontsize=18) 
+plt.show()
+# %%
