@@ -91,48 +91,48 @@ var5_sam, X_test, y_train, y_test = sample_data_stratified(var5_copy)
 
 # # %%
 # ##### Correlation Matrix Heatmap ###
-# import seaborn as sns
-# import matplotlib.pyplot as plt
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# df = [base_copy, var1_copy, var2_copy, var3_copy, var4_copy, var5_copy]
-# for df in df:
-#     correlation_matrix = df.corr(numeric_only=True)
-#     plt.figure(figsize=(35, 35))
-#     sns.heatmap(
-#         correlation_matrix,  
-#         annot=True,          
-#         cmap='coolwarm',     
-#         fmt=".2f",          
-#         linewidths=.5,      
-#         cbar=True           
-#     )
-#     plt.title('Correlation Matrix Heatmap')
-#     plt.show()
+df = [base_copy, var1_copy, var2_copy, var3_copy, var4_copy, var5_copy]
+for df in df:
+    correlation_matrix = df.corr(numeric_only=True)
+    plt.figure(figsize=(35, 35))
+    sns.heatmap(
+        correlation_matrix,  
+        annot=True,          
+        cmap='coolwarm',     
+        fmt=".2f",          
+        linewidths=.5,      
+        cbar=True           
+    )
+    plt.title('Correlation Matrix Heatmap')
+    plt.show()
 
 # %%
 # #### Distribution of All Columns ###
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-# num_cols = len(base_copy.columns)
-# x = 4
-# y = (num_cols + x - 1) // x 
-# plt.figure(figsize=(x * 5, y * 4))
-# for i, col in enumerate(base_copy.columns):
-#     plt.subplot(y, x, i + 1)
+import matplotlib.pyplot as plt
+import seaborn as sns
+num_cols = len(base_copy.columns)
+x = 4
+y = (num_cols + x - 1) // x 
+plt.figure(figsize=(x * 5, y * 4))
+for i, col in enumerate(base_copy.columns):
+    plt.subplot(y, x, i + 1)
 
-#     if base_copy[col].nunique() < 5 and base_copy[col].dtype == 'int64':
-#             sns.countplot(x=col, data=base_copy)
-#             plt.xlabel(col, fontsize=10)
-#             plt.ylabel('Count', fontsize=10)
+    if base_copy[col].nunique() < 5 and base_copy[col].dtype == 'int64':
+            sns.countplot(x=col, data=base_copy)
+            plt.xlabel(col, fontsize=10)
+            plt.ylabel('Count', fontsize=10)
 
-#     else:
-#         sns.histplot(base_copy[col], kde=True, bins=30)
-#         plt.xlabel(col, fontsize=10)
-#         plt.ylabel('Frequency', fontsize=10)
+    else:
+        sns.histplot(base_copy[col], kde=True, bins=30)
+        plt.xlabel(col, fontsize=10)
+        plt.ylabel('Frequency', fontsize=10)
 
-# plt.tight_layout()
-# plt.suptitle('All Columns Distribution', y=1.02, fontsize=18) 
-# plt.show()
+plt.tight_layout()
+plt.suptitle('All Columns Distribution', y=1.02, fontsize=18) 
+plt.show()
 # %%
 ### Modeling ###
 from sklearn.ensemble import GradientBoostingClassifier
@@ -146,6 +146,8 @@ from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
 from sklearn.ensemble import RandomForestClassifier
 import numpy as np
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score
+
 #%%
 ## data splitting for modeling
 def split_train_test(df):
@@ -202,6 +204,7 @@ space = [
     Real(1e-9, 10.0, name='reg_lambda', prior='log-uniform') # L2 정규화
 ]
 #%%
+# 하이퍼파라미터 이름
 param_names = [
         "n_estimators",
         "learning_rate",
@@ -211,91 +214,95 @@ param_names = [
         "reg_alpha",
         "reg_lambda"
     ]
+datasets = {
+    'base':  (x_train_base,  x_test_base,  y_train_base,  y_test_base),
+    'var1':  (x_train_var1,  x_test_var1,  y_train_var1,  y_test_var1),
+    'var2':  (x_train_var2,  x_test_var2,  y_train_var2,  y_test_var2),
+    'var3':  (x_train_var3,  x_test_var3,  y_train_var3,  y_test_var3),
+    'var4':  (x_train_var4,  x_test_var4,  y_train_var4,  y_test_var4),
+    'var5':  (x_train_var5,  x_test_var5,  y_train_var5,  y_test_var5)
+}
+#%% 베이지안 최적화 수행
+results = {}
 
-#%%
-def objective(params):
-    param_dict = dict(zip(param_names, params))
+for name, (X_tr, X_te, y_tr, y_te) in datasets.items():
+    print(f"\n==== Processing dataset: {name} ====")
+    def objective(params):     
+        param_dict = dict(zip(param_names, params))
 
-    model = XGBClassifier(
-        **param_dict,
-        random_state=42, 
-        use_label_encoder=False, 
-        eval_metric='logloss'
+        model = XGBClassifier(
+            **param_dict,
+            random_state=42, 
+            use_label_encoder=False, 
+            eval_metric='auc'
+            )
+
+        auc_scores = k_fold_training(model, X_tr, y_tr)
+        return -np.mean(auc_scores)
+    # 베이지안 최적화 수행
+    res = gp_minimize(
+        func=objective,
+        dimensions=space,
+        n_calls=50,
+        n_random_starts=10,
+        random_state=42,
+        verbose=False
+    )
+
+    best_params = dict(zip(param_names, res.x))
+    print("  최적의 하이퍼파라미터:", best_params)
+    print(f"  CV AUC (평균): {-res.fun:.4f}")
+    print(f"최적의 ROC AUC (K-Fold 검증 평균): {-res.fun:.4f}")
+
+
+# 최적의 하이퍼파라미터 출력
+    final_best_xgb_model = XGBClassifier(
+            **best_params,
+            random_state=42,
+            use_label_encoder=False,
+            eval_metric='logloss'
         )
 
-    auc_scores = k_fold_training(model, x_train_base, y_train_base)
+    # 최적의 하이퍼파라미터로 모델 학습
+    final_best_xgb_model.fit(X_tr, y_tr)
+    
+    # 베이지안 최적화된 모델로 예측
+    y_pred_label = final_best_xgb_model.predict(X_te)
+    y_pred_proba = final_best_xgb_model.predict_proba(X_te)[:, 1]
 
-    return -np.mean(auc_scores)
-#%%
-res_gp = gp_minimize(
-    func=objective,
-    dimensions=space,
-    n_calls=50,
-    n_random_starts=10,
-    random_state=42,
-    verbose=True
-)
+    auc_score   = roc_auc_score(y_te, y_pred_proba)
+    conf_mat    = confusion_matrix(y_te, y_pred_label)
+    acc = accuracy_score(y_te, y_pred_label)
+    prec = precision_score(y_te, y_pred_label)
+    rec = recall_score(y_te, y_pred_label)
+    fpr, tpr, _ = roc_curve(y_te, y_pred_proba)
+        
+    results[name] = {
+            'best_params': best_params,
+            'cv_auc':      -res.fun,
+            'test_auc':    auc_score,
+            'confusion':   conf_mat,
+            'accuracy':    acc,
+            'precision':   prec,
+            'recall':      rec,
+            'fpr':         fpr,
+            'tpr':         tpr
+        }
 
-print(f"최적의 ROC AUC (K-Fold 검증 평균): {-res_gp.fun:.4f}")
-
-best_params = {
-    'n_estimators': res_gp.x[0],
-    'learning_rate': res_gp.x[1],
-    'max_depth': res_gp.x[2],
-    'subsample': res_gp.x[3],
-    'colsample_bytree': res_gp.x[4],
-    'reg_alpha': res_gp.x[5],
-    'reg_lambda': res_gp.x[6]
-}
-print("최적의 하이퍼파라미터:")
-for name, value in best_params.items():
-    print(f"{name}: {value}")
-#%%
-# 최적의 하이퍼파라미터로 XGBoost 모델 생성
-final_best_xgb_model = XGBClassifier(
-    n_estimators=best_params['n_estimators'],
-    learning_rate=best_params['learning_rate'],
-    max_depth=best_params['max_depth'],
-    subsample=best_params['subsample'],
-    colsample_bytree=best_params['colsample_bytree'],
-    reg_alpha=best_params['reg_alpha'],
-    reg_lambda=best_params['reg_lambda'],
-    random_state=42,
-    eval_metric='logloss',
-    use_label_encoder=False
-)
-#%%
-# 최적의 하이퍼파라미터로 모델 학습
-final_best_xgb_model.fit(x_train_base, y_train_base)
-# test_y, pred_y를 활용한 지표 적용
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score
-# 베이지안 최적화된 모델로 예측
-y_pred_test_xgb = final_best_xgb_model.predict(x_test_base)
-y_proba_test_xgb = final_best_xgb_model.predict_proba(x_test_base)[:, 1]
-
-test_auc_bo_xgb = roc_auc_score(y_test_base, y_proba_test_xgb)
-confusion = confusion_matrix(y_test_base, y_pred_test_xgb)
-accuracy  = accuracy_score(y_test_base, y_pred_test_xgb)
-precision = precision_score(y_test_base, y_pred_test_xgb)
-recall    = recall_score(y_test_base, y_pred_test_xgb)
-
-print('================= confusion matrix ====================')
-print(confusion)
-print('=======================================================')
-print(f'정확도:{accuracy}, 정밀도:{precision}, 재현율:{recall}')
-
+    print(f"  테스트 AUC: {auc_score:.4f}, 정확도: {acc:.4f}, 정밀도: {prec:.4f}, 재현율: {rec:.4f}")
+#%% 
+# [ROC Curve 통합 시각화]
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve
-# ROC curve 시각화
-fpr, tpr, thresholds = roc_curve(y_test_base, y_proba_test_xgb)
-auc = roc_auc_score(y_test_base, y_proba_test_xgb)
+plt.figure(figsize=(8, 6))
+for name, res in results.items():
+    plt.plot(res['fpr'], res['tpr'], label=f"{name} (AUC={res['test_auc']:.4f})")
 
-# ROC curve 시각화
-plt.plot(fpr, tpr, linewidth=2,label=f'{'XGB_MODEL_NAME'} (AUC = {auc:.5f})')
-plt.plot([0, 1], [0, 1], 'k--') # dashed diagonal
-plt.xlabel('fpr')
-plt.ylabel('tpr')
-plt.legend()
-print(f'auc:{auc}')
-print(f"베이지안 최적화된 모델의 최종 테스트 AUC: {test_auc_bo_xgb:.4f}")
+plt.plot([0, 1], [0, 1], 'k--', linewidth=1)
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("Variants별 ROC Curve 비교")
+plt.legend(loc="lower right")
+plt.grid(alpha=0.3)
+plt.show()
 # %%
