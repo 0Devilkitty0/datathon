@@ -1,6 +1,19 @@
 #%%
 import pandas as pd
 import warnings
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
+from xgboost import XGBClassifier
+import numpy as np
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score, roc_curve, classification_report
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline
+from sklearn.model_selection import StratifiedKFold
+from collections import defaultdict
+
+#%%
 warnings.filterwarnings('ignore')
 
 base = pd.read_csv('D:/Users/tonyn/Desktop/da_sci_4th/datathon/DATA/Base.csv')
@@ -63,7 +76,6 @@ var5_copy = one_hot(var5_copy)
 
 #%%
 ###100만개 데이터 중 10만개씩 sampling###
-from sklearn.model_selection import train_test_split
 def sample_data_stratified(df):
     df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 0), 'group'] = 0
     df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 1), 'group'] = 1
@@ -91,8 +103,6 @@ var5_sam, X_test, y_train, y_test = sample_data_stratified(var5_copy)
 
 # %%
 ##### Correlation Matrix Heatmap ###
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 df = [base_copy, var1_copy, var2_copy, var3_copy, var4_copy, var5_copy]
 for df in df:
@@ -111,8 +121,6 @@ for df in df:
 
 # %%
 # #### Distribution of All Columns ###
-import matplotlib.pyplot as plt
-import seaborn as sns
 num_cols = len(base_copy.columns)
 x = 4
 y = (num_cols + x - 1) // x 
@@ -162,23 +170,6 @@ plt.suptitle('All Columns Distribution (for fraud_bool = 1)', y=1.02, fontsize=1
 plt.show()
 # %%
 ### Modeling ###
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import KFold
-from sklearn.metrics import roc_auc_score
-from skopt import gp_minimize
-from skopt.space import Integer, Real
-from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
-from catboost import CatBoostClassifier
-from sklearn.ensemble import RandomForestClassifier
-import numpy as np
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score, roc_curve, f1_score
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline
-from sklearn.model_selection import StratifiedKFold
-
-#%%
 ## data splitting for modeling
 def split_train_test(df):
     df.loc[(df['customer_age'] < 50) & (df['fraud_bool'] == 0), 'group'] = 0
@@ -203,9 +194,6 @@ x_train_var5, x_test_var5, y_train_var5, y_test_var5 = split_train_test(var5_sam
 
 # %%
 XGB = XGBClassifier()
-LGB = LGBMClassifier()
-CB = CatBoostClassifier()
-GB = GradientBoostingClassifier()
 
 # %%
 def k_fold_training_smote(model_instance, X_train, y_train):
@@ -249,7 +237,7 @@ datasets = {
     'var5':  (x_train_var5,  x_test_var5,  y_train_var5,  y_test_var5)
 }
 #%% 
-results = {}
+roc_data = defaultdict(dict)
 
 for name, (X_tr, X_te, y_tr, y_te) in datasets.items():
     print(f"\n==== Processing dataset: {name} ====")
@@ -297,38 +285,14 @@ for name, (X_tr, X_te, y_tr, y_te) in datasets.items():
     acc = accuracy_score(y_te, y_pred_label)
     prec = precision_score(y_te, y_pred_label)
     rec = recall_score(y_te, y_pred_label)
-    fpr, tpr, thresholds = roc_curve(y_te, y_pred_proba)
-
-    results = {
-            'cv_auc':      np.mean(auc_scores_cv),
-            'test_auc':    auc_score,
-            'confusion':   conf_mat,
-            'accuracy':    acc,
-            'precision':   prec,
-            'recall':      rec,
-            'fpr':         fpr,
-            'tpr':         tpr,
-            'thresholds':  thresholds
-
-        }
 
     print(f"  테스트 AUC: {auc_score:.4f}, 정확도: {acc:.4f}, 정밀도: {prec:.4f}, 재현율: {rec:.4f}")
- 
-    # [ROC Curve 통합 시각화]
-    import matplotlib.pyplot as plt
-    from sklearn.metrics import roc_curve
-    plt.figure(figsize=(8, 6))
-    plt.plot(results['fpr'], results['tpr'], label=f"(AUC={results['test_auc']:.4f})")
-
-    plt.plot([0, 1], [0, 1], 'k--', linewidth=1)
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title("Variants별 ROC Curve 비교")
-    plt.legend(loc="lower right")
-    plt.grid(alpha=0.3)
-    plt.show()
-
     
+    # 2-6) ROC 곡선 좌표 저장 (루프 내에서는 그리지 않음)
+    fpr, tpr, thr = roc_curve(y_te, y_pred_proba)
+    roc_data[name]['fpr'] = fpr
+    roc_data[name]['tpr'] = tpr
+    roc_data[name]['auc'] = auc_score
 
     # 최적의 임계값 찾기 (예시: Youden's J statistic 최대화)
     # 'thresholds' 배열은 fpr과 tpr이 계산된 임계값들을 포함합니다.
@@ -336,62 +300,47 @@ for name, (X_tr, X_te, y_tr, y_te) in datasets.items():
     # 일반적으로 thresholds 배열은 내림차순으로 정렬되어 있습니다.
 
     youden_j_scores = tpr - fpr
-    optimal_idx = np.argmax(youden_j_scores)
-    optimal_threshold_youden = thresholds[optimal_idx]
-    optimal_fpr_youden = fpr[optimal_idx]
-    optimal_tpr_youden = tpr[optimal_idx]
-
-    print(f"\nOptimal Threshold (Youden's J statistic): {optimal_threshold_youden:.4f}")
-    print(f"  FPR at optimal threshold: {optimal_fpr_youden:.4f}")
-    print(f"  TPR at optimal threshold: {optimal_tpr_youden:.4f}")
-
-    # (0,1) 지점까지의 유클리드 거리 최소화로 최적 임계값 찾기
-    distances = np.sqrt((fpr - 0)**2 + (tpr - 1)**2)
-    optimal_idx_distance = np.argmin(distances)
-    optimal_threshold_distance = thresholds[optimal_idx_distance]
-
-    print(f"\nOptimal Threshold (Min distance to (0,1)): {optimal_threshold_distance:.4f}")
-    print(f"  FPR at optimal threshold: {fpr[optimal_idx_distance]:.4f}")
-    print(f"  TPR at optimal threshold: {tpr[optimal_idx_distance]:.4f}")
+    youden_idx = np.argmax(youden_j_scores)
+    threshold_youden = thr[youden_idx]
+    fpr_youden = fpr[youden_idx]
+    tpr_youden = tpr[youden_idx]
 
     # 선택된 임계값으로 예측 수행
-    y_pred_custom_threshold = (y_pred_proba >= optimal_threshold_youden).astype(int)
-    from sklearn.metrics import classification_report
+    y_pred_custom_threshold = (y_pred_proba >= threshold_youden).astype(int)
     print("\nClassification Report with Optimal Threshold (Youden's J):")
+    print(f"최적 임계값 (Youden's J): {threshold_youden:.4f}")
     print(classification_report(y_test, y_pred_custom_threshold))
-    # %%
+    
     # 정확도 (Accuracy)
     accuracy = accuracy_score(y_test, y_pred_custom_threshold)
-
+    
     # 정밀도 (Precision)
     precision = precision_score(y_test, y_pred_custom_threshold, pos_label=1, zero_division=0)
 
     # 재현율 (Recall)
     recall = recall_score(y_test, y_pred_custom_threshold, pos_label=1, zero_division=0)
 
-    # F1-score (참고용: 정밀도와 재현율의 조화 평균)
-    f1 = f1_score(y_test, y_pred_custom_threshold, pos_label=1, zero_division=0)
-
     # FPR(False Positive Rate)
     fpr, tpr, thresholds = roc_curve(y_test, y_pred_custom_threshold)
-
-    # FPR
-    # 혼동 행렬 계산
-    # [[TN, FP],
-    #  [FN, TP]]
-    tn, fp, fn, tp = confusion_matrix(y_test, y_pred_custom_threshold).ravel()
-    # FPR 계산
-    if (fp + tn) == 0:
-        fpr = 0.0 # 실제 음성 데이터가 없는 경우
-    else:
-        fpr = fp / (fp + tn)
-    print(f"임계값 {optimal_threshold_youden}에서의 FPR: {fpr:.4f}")
-    print(f"FP: {fp}, TN: {tn}")
+    print(f"임계값 {threshold_youden}에서의 FPR: {fpr:.4f}")
 
     print("\n--- 최적 임계값 적용 시 성능 지표 ---")
-    print(f"AUC: {auc_score:.4f}")
     print(f"정확도 (Accuracy): {accuracy:.4f}")
     print(f"정밀도 (Precision): {precision:.4f}")
     print(f"재현율 (Recall): {recall:.4f}")
-    print(f"F1-Score: {f1:.4f}")
-    # %%
+# %%
+#%% 
+# [ROC Curve 통합 시각화]
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve
+plt.figure(figsize=(8, 6))
+for name, res in roc_data.items():
+    plt.plot(res['fpr'], res['tpr'], label=f"{name} (AUC={res['auc']:.4f})")
+
+plt.plot([0, 1], [0, 1], 'k--', linewidth=1)
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("Variants별 ROC Curve 비교")
+plt.legend(loc="lower right")
+plt.grid(alpha=0.3)
+plt.show()
