@@ -3,16 +3,21 @@ import pandas as pd
 import warnings
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from xgboost import XGBClassifier
 import numpy as np
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score, roc_curve, classification_report
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score 
+from sklearn.metrics import roc_auc_score, roc_curve, classification_report,precision_recall_curve, auc
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline
 from sklearn.model_selection import StratifiedKFold
 from collections import defaultdict
 
+#%%
+plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False
 #%%
 warnings.filterwarnings('ignore')
 
@@ -226,7 +231,7 @@ def k_fold_training_smote(model_instance, X_train, y_train):
 default_xgb_model = XGBClassifier(
     random_state=42,
     use_label_encoder=False,
-    eval_metric='auc' # K-Fold 훈련 시에는 'auc'보다 'logloss'가 더 일반적
+    eval_metric='auc' # K-Fold 평가를 위해 'auc' 사용
 )
 datasets = {
     'base':  (x_train_base,  x_test_base,  y_train_base,  y_test_base),
@@ -238,6 +243,7 @@ datasets = {
 }
 #%% 
 roc_data = defaultdict(dict)
+pr_data = defaultdict(dict)
 
 for name, (X_tr, X_te, y_tr, y_te) in datasets.items():
     print(f"\n==== Processing dataset: {name} ====")
@@ -288,47 +294,53 @@ for name, (X_tr, X_te, y_tr, y_te) in datasets.items():
 
     print(f"  테스트 AUC: {auc_score:.4f}, 정확도: {acc:.4f}, 정밀도: {prec:.4f}, 재현율: {rec:.4f}")
     
-    # 2-6) ROC 곡선 좌표 저장 (루프 내에서는 그리지 않음)
+    # ROC 곡선 좌표 저장 (루프 내에서는 그리지 않음)
     fpr, tpr, thr = roc_curve(y_te, y_pred_proba)
     roc_data[name]['fpr'] = fpr
     roc_data[name]['tpr'] = tpr
     roc_data[name]['auc'] = auc_score
+    roc_data[name]['thresholds'] = thr
+
+
+    # PR 곡선 좌표 저장
+    precision_pr, recall_pr, thresholds_pr = precision_recall_curve(y_te, y_pred_proba)
+    pr_auc = auc(recall_pr, precision_pr) # PR AUC 계산
+
+    pr_data[name]['precision'] = precision_pr
+    pr_data[name]['recall'] = recall_pr
+    pr_data[name]['auc'] = pr_auc # PR AUC 저장
 
     # 최적의 임계값 찾기 (예시: Youden's J statistic 최대화)
     # 'thresholds' 배열은 fpr과 tpr이 계산된 임계값들을 포함합니다.
     # thresholds[0]은 실제 사용된 가장 높은 임계값이며, thresholds[-1]은 가장 낮은 임계값입니다.
     # 일반적으로 thresholds 배열은 내림차순으로 정렬되어 있습니다.
-
+    
     youden_j_scores = tpr - fpr
     youden_idx = np.argmax(youden_j_scores)
     threshold_youden = thr[youden_idx]
     fpr_youden = fpr[youden_idx]
     tpr_youden = tpr[youden_idx]
+    print("\nClassification Report with Optimal Threshold (Youden's J):")
+    print(f"최적 임계값 (Youden's J): {threshold_youden:.4f}")
 
     # 선택된 임계값으로 예측 수행
     y_pred_custom_threshold = (y_pred_proba >= threshold_youden).astype(int)
-    print("\nClassification Report with Optimal Threshold (Youden's J):")
-    print(f"최적 임계값 (Youden's J): {threshold_youden:.4f}")
-    print(classification_report(y_test, y_pred_custom_threshold))
+    print(classification_report(y_te, y_pred_custom_threshold))
     
     # 정확도 (Accuracy)
-    accuracy = accuracy_score(y_test, y_pred_custom_threshold)
-    
+    accuracy = accuracy_score(y_te, y_pred_custom_threshold)
+
     # 정밀도 (Precision)
-    precision = precision_score(y_test, y_pred_custom_threshold, pos_label=1, zero_division=0)
+    precision = precision_score(y_te, y_pred_custom_threshold, pos_label=1, zero_division=0)
 
     # 재현율 (Recall)
-    recall = recall_score(y_test, y_pred_custom_threshold, pos_label=1, zero_division=0)
-
-    # FPR(False Positive Rate)
-    fpr, tpr, thresholds = roc_curve(y_test, y_pred_custom_threshold)
-    print(f"임계값 {threshold_youden}에서의 FPR: {fpr:.4f}")
-
+    recall = recall_score(y_te, y_pred_custom_threshold, pos_label=1, zero_division=0)
+    
     print("\n--- 최적 임계값 적용 시 성능 지표 ---")
     print(f"정확도 (Accuracy): {accuracy:.4f}")
     print(f"정밀도 (Precision): {precision:.4f}")
     print(f"재현율 (Recall): {recall:.4f}")
-# %%
+
 #%% 
 # [ROC Curve 통합 시각화]
 import matplotlib.pyplot as plt
@@ -344,3 +356,19 @@ plt.title("Variants별 ROC Curve 비교")
 plt.legend(loc="lower right")
 plt.grid(alpha=0.3)
 plt.show()
+
+#%%
+# PR Curve 통합 시각화
+plt.figure(figsize=(8, 6))
+for name, res in pr_data.items():
+    plt.plot(res['recall'], res['precision'], label=f"{name} (AP={res['auc']:.4f})") # AP = Average Precision, PR AUC와 동일
+
+plt.xlabel("Recall (재현율)")
+plt.ylabel("Precision (정밀도)")
+plt.title("Variants별 Precision-Recall Curve 비교")
+plt.legend(loc="lower left")
+plt.grid(True)
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.show()
+# %%
